@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RING 1 — DARK CITY</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+
+body{
+overflow:hidden;
+background:#000;
+font-family:Arial;
+}
+
+/* CANVAS */
+canvas{
+display:block;
+background:#0b0f14;
+}
+
+/* UI */
+#ui{
+position:fixed;
+top:10px;
+left:10px;
+color:white;
+z-index:10;
+font-size:14px;
+text-shadow:1px 1px 3px black;
+}
+
+/* SCREENS */
+.screen{
+position:fixed;
+inset:0;
+background:black;
+color:white;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+z-index:100;
+text-align:center;
+}
+
+/* BUTTON */
+button{
+padding:10px 18px;
+margin-top:10px;
+cursor:pointer;
+}
+
+/* RAIN */
+.rain{
+position:fixed;
+inset:0;
+pointer-events:none;
+background: repeating-linear-gradient(
+transparent,
+transparent 3px,
+rgba(255,255,255,0.05) 4px
+);
+animation: rain 0.2s linear infinite;
+z-index:5;
+}
+
+@keyframes rain{
+from{transform:translateY(0);}
+to{transform:translateY(20px);}
+}
+
+/* MOBILE JOYSTICK */
+#joystick{
+position:fixed;
+bottom:60px;
+left:20px;
+width:120px;
+height:120px;
+background:rgba(255,255,255,0.1);
+border-radius:50%;
+z-index:20;
+}
+
+#stick{
+width:50px;
+height:50px;
+background:white;
+border-radius:50%;
+position:absolute;
+top:35px;
+left:35px;
+opacity:0.5;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+<div class="rain"></div>
+
+<div id="ui">
+💰 Coins: <span id="coins">0</span><br>
+❤️ HP: <span id="hp">100</span><br>
+☠️ Kills: <span id="kills">0</span>
+</div>
+
+<!-- MOBILE JOYSTICK -->
+<div id="joystick"><div id="stick"></div></div>
+
+<!-- INTRO -->
+<div id="intro" class="screen">
+<h1>RING 1</h1>
+<p>Dark City Survival</p>
+<button onclick="startGame()">START</button>
+</div>
+
+<!-- OUTRO -->
+<div id="outro" class="screen" style="display:none;">
+<h1>YOU ESCAPED</h1>
+<p id="outText"></p>
+
+<p style="color:#aaa;margin-top:10px;">
+You did it... I'm sorry about your dad.
+</p>
+
+<button onclick="downloadGame()">⬇ Download</button>
+<button onclick="location.reload()">↻ Restart</button>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let W,H;
+function resize(){
+W=innerWidth;
+H=innerHeight;
+canvas.width=W;
+canvas.height=H;
+}
+resize();
+addEventListener("resize",resize);
+
+/* WORLD */
+const worldW=3000;
+const worldH=3000;
+
+/* PLAYER */
+let player={x:500,y:500,hp:100,speed:4};
+
+let bullets=[];
+let cops=[];
+
+let kills=0;
+let coins=0;
+
+/* CAMERA */
+let camX=0;
+let camY=0;
+
+/* INPUT */
+let keys={};
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+/* MOUSE */
+let mouse={x:0,y:0};
+
+canvas.addEventListener("mousemove",e=>{
+mouse.x=e.clientX;
+mouse.y=e.clientY;
+});
+
+/* TAP / CLICK SHOOT (IMPORTANT FIX) */
+canvas.addEventListener("mousedown",shoot);
+canvas.addEventListener("touchstart",(e)=>{
+e.preventDefault();
+shoot();
+},{passive:false});
+
+/* JOYSTICK */
+let joy={x:0,y:0};
+
+let joystick=document.getElementById("joystick");
+let stick=document.getElementById("stick");
+
+joystick.addEventListener("touchmove",e=>{
+let t=e.touches[0];
+joy.x=(t.clientX-window.innerWidth/2)/60;
+joy.y=(t.clientY-window.innerHeight/2)/60;
+});
+
+joystick.addEventListener("touchend",()=>{
+joy.x=0;joy.y=0;
+});
+
+/* SAVE */
+function save(){
+localStorage.setItem("ring_save",JSON.stringify({
+x:player.x,y:player.y,hp:player.hp,
+kills,coins
+}));
+}
+
+function load(){
+let s=localStorage.getItem("ring_save");
+if(s){
+let d=JSON.parse(s);
+player.x=d.x;
+player.y=d.y;
+player.hp=d.hp;
+kills=d.kills;
+coins=d.coins;
+}
+}
+
+/* COP */
+function spawnCop(){
+cops.push({
+x:Math.random()*worldW,
+y:Math.random()*worldH
+});
+}
+
+/* SHOOT */
+function shoot(){
+bullets.push({
+x:player.x,
+y:player.y,
+vx:(mouse.x-W/2)*0.02,
+vy:(mouse.y-H/2)*0.02
+});
+}
+
+/* OUTRO */
+function outro(){
+document.getElementById("outro").style.display="flex";
+
+let text="The city remembers you...\nYou are no longer safe.";
+typeText(text);
+}
+
+function typeText(text){
+let el=document.getElementById("outText");
+el.innerText="";
+let i=0;
+function t(){
+if(i<text.length){
+el.innerText+=text[i++];
+setTimeout(t,40);
+}
+}
+t();
+}
+
+/* DOWNLOAD */
+function downloadGame(){
+let blob=new Blob([document.documentElement.outerHTML],{type:"text/html"});
+let url=URL.createObjectURL(blob);
+let a=document.createElement("a");
+a.href=url;
+a.download="RING1.html";
+a.click();
+}
+
+/* START */
+function startGame(){
+document.getElementById("intro").style.display="none";
+load();
+spawnCop();
+loop();
+}
+
+/* LOOP */
+function loop(){
+requestAnimationFrame(loop);
+
+/* MOVE */
+if(keys["w"])player.y-=player.speed;
+if(keys["s"])player.y+=player.speed;
+if(keys["a"])player.x-=player.speed;
+if(keys["d"])player.x+=player.speed;
+
+/* MOBILE MOVE */
+player.x+=joy.x;
+player.y+=joy.y;
+
+/* LIMIT */
+player.x=Math.max(20,Math.min(worldW-20,player.x));
+player.y=Math.max(20,Math.min(worldH-20,player.y));
+
+/* CAMERA */
+camX+=(player.x-W/2-camX)*0.1;
+camY+=(player.y-H/2-camY)*0.1;
+
+/* MAP */
+ctx.fillStyle="#0b0f14";
+ctx.fillRect(0,0,W,H);
+
+/* BUILDINGS */
+for(let x=0;x<worldW;x+=200){
+for(let y=0;y<worldH;y+=200){
+ctx.fillStyle="#2a2f3a";
+ctx.fillRect(x-camX,y-camY,80,80);
+}
+}
+
+/* PLAYER */
+ctx.fillStyle="cyan";
+ctx.fillRect(player.x-camX,player.y-camY,20,20);
+
+/* COP AI */
+ctx.fillStyle="red";
+for(let c of cops){
+c.x+=(player.x-c.x)*0.01;
+c.y+=(player.y-c.y)*0.01;
+
+ctx.fillRect(c.x-camX,c.y-camY,20,20);
+
+if(Math.hypot(player.x-c.x,player.y-c.y)<20){
+player.hp--;
+}
+}
+
+if(cops.length<6)spawnCop();
+
+/* BULLETS */
+ctx.fillStyle="yellow";
+for(let b of bullets){
+b.x+=b.vx;
+b.y+=b.vy;
+
+ctx.fillRect(b.x-camX,b.y-camY,4,4);
+
+for(let i=cops.length-1;i>=0;i--){
+if(Math.hypot(b.x-cops[i].x,b.y-cops[i].y)<20){
+cops.splice(i,1);
+kills++;
+coins+=10;
+}
+}
+}
+
+/* SAVE */
+save();
+
+/* UI */
+document.getElementById("coins").innerText=coins;
+document.getElementById("hp").innerText=player.hp;
+document.getElementById("kills").innerText=kills;
+
+/* END */
+if(player.hp<=0){
+outro();
+}
+
+}
+
+/* FIRST LOAD */
+loop();
+</script>
+
+</body>
+</html>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
